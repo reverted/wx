@@ -22,7 +22,7 @@ type Logger interface {
 
 func NewWebServerFromEnv(logger Logger, handler http.Handler) http.Handler {
 
-	target, err := url.Parse(os.Getenv("ELAPSE_WEB_API_URL"))
+	target, err := url.Parse(os.Getenv("REVERTED_WX_API_URL"))
 	if err != nil {
 		logger.Fatal(err)
 	}

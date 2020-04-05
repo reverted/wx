@@ -18,16 +18,16 @@ type opt func(*authServer)
 func FromEnv() opt {
 	return func(self *authServer) {
 		endpoint := oauth2.Endpoint{
-			TokenURL: os.Getenv("ELAPSE_WEB_TOKEN_URL"),
-			AuthURL:  os.Getenv("ELAPSE_WEB_AUTH_URL"),
+			TokenURL: os.Getenv("REVERTED_WX_TOKEN_URL"),
+			AuthURL:  os.Getenv("REVERTED_WX_AUTH_URL"),
 		}
 
 		self.Config = oauth2.Config{
 			Endpoint:     endpoint,
-			ClientID:     os.Getenv("ELAPSE_WEB_CLIENT_ID"),
-			ClientSecret: os.Getenv("ELAPSE_WEB_CLIENT_SECRET"),
-			RedirectURL:  os.Getenv("ELAPSE_WEB_REDIRECT_URL"),
-			Scopes:       strings.Split(os.Getenv("ELAPSE_WEB_SCOPE"), ","),
+			ClientID:     os.Getenv("REVERTED_WX_CLIENT_ID"),
+			ClientSecret: os.Getenv("REVERTED_WX_CLIENT_SECRET"),
+			RedirectURL:  os.Getenv("REVERTED_WX_REDIRECT_URL"),
+			Scopes:       strings.Split(os.Getenv("REVERTED_WX_SCOPE"), ","),
 		}
 	}
 }
