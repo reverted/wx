@@ -6,51 +6,33 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
 )
 
-type opt func(*authServer)
+type authOpt func(*authServer)
 
-func FromEnv() opt {
-	return func(self *authServer) {
-		endpoint := oauth2.Endpoint{
-			TokenURL: os.Getenv("REVERTED_WX_TOKEN_URL"),
-			AuthURL:  os.Getenv("REVERTED_WX_AUTH_URL"),
-		}
-
-		self.Config = oauth2.Config{
-			Endpoint:     endpoint,
-			ClientID:     os.Getenv("REVERTED_WX_CLIENT_ID"),
-			ClientSecret: os.Getenv("REVERTED_WX_CLIENT_SECRET"),
-			RedirectURL:  os.Getenv("REVERTED_WX_REDIRECT_URL"),
-			Scopes:       strings.Split(os.Getenv("REVERTED_WX_SCOPE"), ","),
-		}
-	}
-}
-
-func WithOAuthConfig(config oauth2.Config) opt {
+func WithOAuthConfig(config oauth2.Config) authOpt {
 	return func(self *authServer) {
 		self.Config = config
 	}
 }
 
-func WithAuthCookieName(name string) opt {
+func WithAuthCookieName(name string) authOpt {
 	return func(self *authServer) {
 		self.authCookieName = name
 	}
 }
 
-func WithStateCookieName(name string) opt {
+func WithStateCookieName(name string) authOpt {
 	return func(self *authServer) {
 		self.stateCookieName = name
 	}
 }
 
-func NewAuthServer(logger Logger, opts ...opt) *authServer {
+func NewAuthServer(logger Logger, opts ...authOpt) *authServer {
 	server := &authServer{
 		Logger:          logger,
 		authCookieName:  "auth",
@@ -108,7 +90,7 @@ func (self *authServer) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectUrl, err := url.Parse(state.RedirectUri)
+	redirectUrl, err := url.ParseRequestURI(state.RedirectUri)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		self.Logger.Error(err)
@@ -152,7 +134,7 @@ func (self *authServer) Logout(w http.ResponseWriter, r *http.Request) {
 		redirectUri = "/"
 	}
 
-	redirectUrl, err := url.Parse(redirectUri)
+	redirectUrl, err := url.ParseRequestURI(redirectUri)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		self.Logger.Error(err)

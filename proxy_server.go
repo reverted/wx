@@ -9,18 +9,38 @@ import (
 
 type Modifier func(r *http.Request) error
 
-func NewProxyServer(
-	logger Logger,
-	client *http.Client,
-	target *url.URL,
-	modifiers ...Modifier,
-) *proxyServer {
-	return &proxyServer{
-		Logger:    logger,
-		Client:    client,
-		Target:    target,
-		Modifiers: modifiers,
+type proxyOpt func(*proxyServer)
+
+func WithClient(client *http.Client) proxyOpt {
+	return func(self *proxyServer) {
+		self.Client = client
 	}
+}
+
+func WithTarget(target *url.URL) proxyOpt {
+	return func(self *proxyServer) {
+		self.Target = target
+	}
+}
+
+func WithModifier(modifier Modifier) proxyOpt {
+	return func(self *proxyServer) {
+		self.Modifiers = append(self.Modifiers, modifier)
+	}
+}
+
+func NewProxyServer(logger Logger, opts ...proxyOpt) *proxyServer {
+	server := &proxyServer{
+		Logger:    logger,
+		Client:    http.DefaultClient,
+		Modifiers: []Modifier{},
+	}
+
+	for _, opt := range opts {
+		opt(server)
+	}
+
+	return server
 }
 
 type proxyServer struct {
@@ -95,15 +115,12 @@ func (self *proxyServer) Stream(w http.ResponseWriter, r *http.Request, resp *ht
 		io.Copy(w, resp.Body)
 	}()
 
-	ticker := time.NewTicker(100 * time.Millisecond)
-
 	for {
 		select {
-		case <-ticker.C:
+		case <-time.After(100 * time.Millisecond):
 			flusher.Flush()
 
 		case <-r.Context().Done():
-			ticker.Stop()
 			return
 		}
 	}

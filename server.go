@@ -3,50 +3,53 @@ package wx
 import (
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
+
+	"golang.org/x/oauth2"
 )
 
 type Logger interface {
-	Fatal(a ...interface{})
-	Fatalf(format string, a ...interface{})
 	Error(a ...interface{})
-	Errorf(format string, a ...interface{})
-	Warn(a ...interface{})
-	Warnf(format string, a ...interface{})
 	Info(a ...interface{})
-	Infof(format string, a ...interface{})
 	Debug(a ...interface{})
-	Debugf(format string, a ...interface{})
 }
 
-func NewWebServerFromEnv(logger Logger, handler http.Handler) http.Handler {
-
-	target, err := url.Parse(os.Getenv("REVERTED_WX_API_URL"))
-	if err != nil {
-		logger.Fatal(err)
-	}
+func NewWebServer(
+	logger Logger,
+	target *url.URL,
+	config oauth2.Config,
+	handler http.Handler,
+) http.Handler {
 
 	authServer := NewAuthServer(
 		logger,
-		FromEnv(),
+		WithOAuthConfig(config),
 	)
 
 	proxyServer := NewProxyServer(
 		logger,
-		http.DefaultClient,
-		target,
-		authServer.ModifyHeader,
+		WithTarget(target),
+		WithModifier(authServer.ModifyHeader),
 	)
 
-	targetPath := strings.TrimRight(target.Path, "/") + "/"
+	proxyPath := strings.TrimRight(target.Path, "/") + "/"
+
+	return New(authServer, proxyServer, proxyPath, handler)
+}
+
+func New(
+	authServer *authServer,
+	proxyServer *proxyServer,
+	proxyPath string,
+	handler http.Handler,
+) http.Handler {
 
 	server := http.NewServeMux()
 	server.HandleFunc("/auth/login", authServer.Login)
 	server.HandleFunc("/auth/logout", authServer.Logout)
 	server.HandleFunc("/auth/callback", authServer.Callback)
 	server.HandleFunc("/auth/userinfo", authServer.UserInfo)
-	server.HandleFunc(targetPath, proxyServer.Serve)
+	server.HandleFunc(proxyPath, proxyServer.Serve)
 	server.Handle("/", handler)
 	return server
 }
