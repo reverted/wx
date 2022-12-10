@@ -1,6 +1,7 @@
 package wx
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -54,7 +55,12 @@ func (self *proxyServer) Serve(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := self.Proxy(r)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		switch t := err.(type) {
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		case *statusError:
+			w.WriteHeader(t.StatusCode)
+		}
 		self.Logger.Error(err)
 		return
 	}
@@ -124,4 +130,20 @@ func (self *proxyServer) Stream(w http.ResponseWriter, r *http.Request, resp *ht
 			return
 		}
 	}
+}
+
+func NewStatusError(statusCode int, err error) *statusError {
+	return &statusError{
+		StatusCode: statusCode,
+		Err:        err,
+	}
+}
+
+type statusError struct {
+	StatusCode int
+	Err        error
+}
+
+func (r *statusError) Error() string {
+	return fmt.Sprintf("status %d: err %v", r.StatusCode, r.Err)
 }
