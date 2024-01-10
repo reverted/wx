@@ -1,6 +1,6 @@
 module github.com/reverted/wx
 
-go 1.17
+go 1.20
 
 require golang.org/x/oauth2 v0.16.0
 
