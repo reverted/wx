@@ -87,7 +87,6 @@ func (self *proxyServer) Proxy(r *http.Request) (*http.Response, error) {
 	url := self.Target.ResolveReference(r.URL)
 
 	self.Logger.Info("<<< ", r.URL.String())
-	defer self.Logger.Info(">>> ", url.String())
 
 	req, err := http.NewRequest(r.Method, url.String(), r.Body)
 	if err != nil {
@@ -105,6 +104,8 @@ func (self *proxyServer) Proxy(r *http.Request) (*http.Response, error) {
 			return nil, err
 		}
 	}
+
+	self.Logger.Info(">>> ", url.String())
 
 	return self.Client.Do(req)
 }
