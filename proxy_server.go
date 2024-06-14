@@ -118,16 +118,34 @@ func (self *proxyServer) Stream(w http.ResponseWriter, r *http.Request, resp *ht
 		return
 	}
 
+	ctx := r.Context()
+
 	go func() {
-		io.Copy(w, resp.Body)
+		buf := make([]byte, 1024)
+		for {
+			n, err := resp.Body.Read(buf)
+			if err != nil {
+				self.Logger.Error(err)
+				return
+			}
+
+			if _, err := w.Write(buf[:n]); err != nil {
+				self.Logger.Error(err)
+				return
+			}
+
+			if ctx.Err() != nil {
+				return
+			}
+		}
 	}()
 
 	for {
 		select {
 		case <-time.After(100 * time.Millisecond):
 			flusher.Flush()
-
-		case <-r.Context().Done():
+		case <-ctx.Done():
+			self.Logger.Info("stream context done")
 			return
 		}
 	}
