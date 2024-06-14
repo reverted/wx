@@ -77,6 +77,7 @@ func (self *proxyServer) Serve(w http.ResponseWriter, r *http.Request) {
 
 	if resp.Header.Get("Content-Type") == "text/event-stream" {
 		self.Stream(w, r, resp)
+		self.Logger.Info("streaming done")
 	} else {
 		io.Copy(w, resp.Body)
 	}
@@ -88,7 +89,7 @@ func (self *proxyServer) Proxy(r *http.Request) (*http.Response, error) {
 
 	self.Logger.Info("<<< ", r.URL.String())
 
-	req, err := http.NewRequest(r.Method, url.String(), r.Body)
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, url.String(), r.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -114,30 +115,31 @@ func (self *proxyServer) Stream(w http.ResponseWriter, r *http.Request, resp *ht
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "Streaming not supported", http.StatusBadRequest)
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
 		return
 	}
 
 	ctx := r.Context()
 
 	go func() {
-		buf := make([]byte, 1024)
+		buf := make([]byte, 8192)
 		for {
 			n, err := resp.Body.Read(buf)
 			if err != nil {
 				self.Logger.Error(err)
-				return
+				break
 			}
 
 			if _, err := w.Write(buf[:n]); err != nil {
 				self.Logger.Error(err)
-				return
+				break
 			}
 
 			if ctx.Err() != nil {
-				return
+				break
 			}
 		}
+		self.Logger.Info("copy done")
 	}()
 
 	for {
@@ -145,7 +147,7 @@ func (self *proxyServer) Stream(w http.ResponseWriter, r *http.Request, resp *ht
 		case <-time.After(100 * time.Millisecond):
 			flusher.Flush()
 		case <-ctx.Done():
-			self.Logger.Info("stream context done")
+			self.Logger.Info("context done")
 			return
 		}
 	}
