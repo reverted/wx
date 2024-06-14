@@ -10,7 +10,9 @@ import (
 
 type Logger interface {
 	Error(a ...interface{})
+	Errorf(fmt string, a ...interface{})
 	Info(a ...interface{})
+	Infof(fmt string, a ...interface{})
 	Debug(a ...interface{})
 }
 

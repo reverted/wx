@@ -53,15 +53,22 @@ type proxyServer struct {
 
 func (self *proxyServer) Serve(w http.ResponseWriter, r *http.Request) {
 
-	resp, err := self.Proxy(r)
+	req, err := self.NewRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		self.Logger.Errorf("new request : %v", err)
+		return
+	}
+
+	resp, err := self.Client.Do(req)
 	if err != nil {
 		switch t := err.(type) {
 		default:
-			w.WriteHeader(http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		case *statusError:
-			w.WriteHeader(t.StatusCode)
+			http.Error(w, t.Error(), t.StatusCode)
 		}
-		self.Logger.Error(err)
+		self.Logger.Errorf("client do : %v", err)
 		return
 	}
 
@@ -76,14 +83,14 @@ func (self *proxyServer) Serve(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(resp.StatusCode)
 
 	if resp.Header.Get("Content-Type") == "text/event-stream" {
-		self.Stream(w, r, resp)
+		self.Stream(w, req, resp)
 		self.Logger.Info("streaming done")
 	} else {
 		io.Copy(w, resp.Body)
 	}
 }
 
-func (self *proxyServer) Proxy(r *http.Request) (*http.Response, error) {
+func (self *proxyServer) NewRequest(r *http.Request) (*http.Request, error) {
 
 	url := self.Target.ResolveReference(r.URL)
 
@@ -91,7 +98,7 @@ func (self *proxyServer) Proxy(r *http.Request) (*http.Response, error) {
 
 	req, err := http.NewRequestWithContext(r.Context(), r.Method, url.String(), r.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("new request: %w", err)
 	}
 
 	for h, val := range r.Header {
@@ -102,13 +109,13 @@ func (self *proxyServer) Proxy(r *http.Request) (*http.Response, error) {
 
 	for _, modifier := range self.Modifiers {
 		if err := modifier(req); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("modifier: %w", err)
 		}
 	}
 
-	self.Logger.Info(">>> ", url.String())
+	self.Logger.Info(">>> ", req.URL.String())
 
-	return self.Client.Do(req)
+	return req, nil
 }
 
 func (self *proxyServer) Stream(w http.ResponseWriter, r *http.Request, resp *http.Response) {
@@ -126,12 +133,12 @@ func (self *proxyServer) Stream(w http.ResponseWriter, r *http.Request, resp *ht
 		for {
 			n, err := resp.Body.Read(buf)
 			if err != nil {
-				self.Logger.Error(err)
+				self.Logger.Errorf("read body: %v", err)
 				break
 			}
 
 			if _, err := w.Write(buf[:n]); err != nil {
-				self.Logger.Error(err)
+				self.Logger.Errorf("write body: %v", err)
 				break
 			}
 
