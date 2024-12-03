@@ -15,20 +15,20 @@ import (
 type authOpt func(*authServer)
 
 func WithOAuthConfig(config oauth2.Config) authOpt {
-	return func(self *authServer) {
-		self.Config = config
+	return func(a *authServer) {
+		a.Config = config
 	}
 }
 
 func WithAuthCookieName(name string) authOpt {
-	return func(self *authServer) {
-		self.authCookieName = name
+	return func(a *authServer) {
+		a.authCookieName = name
 	}
 }
 
 func WithStateCookieName(name string) authOpt {
-	return func(self *authServer) {
-		self.stateCookieName = name
+	return func(a *authServer) {
+		a.stateCookieName = name
 	}
 }
 
@@ -53,65 +53,65 @@ type authServer struct {
 	stateCookieName string
 }
 
-func (self *authServer) Login(w http.ResponseWriter, r *http.Request) {
+func (a *authServer) Login(w http.ResponseWriter, r *http.Request) {
 
-	state, err := self.encodeState(r)
+	state, err := a.encodeState(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		self.Logger.Error(err)
+		a.Logger.Error(err)
 		return
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     self.stateCookieName,
+		Name:     a.stateCookieName,
 		Value:    state,
 		Path:     "/",
 		Expires:  time.Now().Add(time.Hour),
 		HttpOnly: true,
 	})
 
-	url := self.Config.AuthCodeURL(state, oauth2.AccessTypeOffline)
+	url := a.Config.AuthCodeURL(state, oauth2.AccessTypeOffline)
 
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
-func (self *authServer) Callback(w http.ResponseWriter, r *http.Request) {
+func (a *authServer) Callback(w http.ResponseWriter, r *http.Request) {
 
-	if err := self.checkError(r); err != nil {
+	if err := a.checkError(r); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		self.Logger.Error(err)
+		a.Logger.Error(err)
 		return
 	}
 
-	state, err := self.decodeState(r)
+	state, err := a.decodeState(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		self.Logger.Error(err)
+		a.Logger.Error(err)
 		return
 	}
 
 	redirectUrl, err := url.ParseRequestURI(state.RedirectUri)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		self.Logger.Error(err)
+		a.Logger.Error(err)
 		return
 	}
 
 	if redirectUrl.Host != "" {
 		w.WriteHeader(http.StatusBadRequest)
-		self.Logger.Error(errors.New("Invalid redirect"))
+		a.Logger.Error(errors.New("invalid redirect"))
 		return
 	}
 
-	token, err := self.Config.Exchange(r.Context(), r.FormValue("code"))
+	token, err := a.Config.Exchange(r.Context(), r.FormValue("code"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		self.Logger.Error(err)
+		a.Logger.Error(err)
 		return
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     self.authCookieName,
+		Name:     a.authCookieName,
 		Value:    token.TokenType + " " + token.AccessToken,
 		Path:     "/",
 		Expires:  token.Expiry,
@@ -119,7 +119,7 @@ func (self *authServer) Callback(w http.ResponseWriter, r *http.Request) {
 	})
 
 	http.SetCookie(w, &http.Cookie{
-		Name:   self.stateCookieName,
+		Name:   a.stateCookieName,
 		Path:   "/",
 		MaxAge: -1,
 	})
@@ -127,7 +127,7 @@ func (self *authServer) Callback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectUrl.String(), http.StatusTemporaryRedirect)
 }
 
-func (self *authServer) Logout(w http.ResponseWriter, r *http.Request) {
+func (a *authServer) Logout(w http.ResponseWriter, r *http.Request) {
 
 	redirectUri := r.FormValue("redirect_uri")
 	if redirectUri == "" {
@@ -137,18 +137,18 @@ func (self *authServer) Logout(w http.ResponseWriter, r *http.Request) {
 	redirectUrl, err := url.ParseRequestURI(redirectUri)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		self.Logger.Error(err)
+		a.Logger.Error(err)
 		return
 	}
 
 	if redirectUrl.Host != "" {
 		w.WriteHeader(http.StatusBadRequest)
-		self.Logger.Error(errors.New("Invalid redirect"))
+		a.Logger.Error(errors.New("invalid redirect"))
 		return
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:   self.authCookieName,
+		Name:   a.authCookieName,
 		Path:   "/",
 		MaxAge: -1,
 	})
@@ -156,37 +156,37 @@ func (self *authServer) Logout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectUrl.String(), http.StatusTemporaryRedirect)
 }
 
-func (self *authServer) UserInfo(w http.ResponseWriter, r *http.Request) {
+func (a *authServer) UserInfo(w http.ResponseWriter, r *http.Request) {
 
-	cookie, err := r.Cookie(self.authCookieName)
+	cookie, err := r.Cookie(a.authCookieName)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		self.Logger.Debug("Missing authorization cookie")
+		a.Logger.Debug("missing authorization cookie")
 		return
 	}
 
 	parts := strings.Split(cookie.Value, ".")
 	if len(parts) < 2 {
 		w.WriteHeader(http.StatusUnauthorized)
-		self.Logger.Debug("Marlformed authorization cookie")
+		a.Logger.Debug("marlformed authorization cookie")
 		return
 	}
 
 	var claims map[string]interface{}
-	if err = self.decode(parts[1], &claims); err != nil {
+	if err = a.decode(parts[1], &claims); err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
-		self.Logger.Error(err)
+		a.Logger.Error(err)
 		return
 	}
 
 	json.NewEncoder(w).Encode(claims)
 }
 
-func (self *authServer) ModifyHeader(r *http.Request) error {
+func (a *authServer) ModifyHeader(r *http.Request) error {
 
-	cookie, err := r.Cookie(self.authCookieName)
+	cookie, err := r.Cookie(a.authCookieName)
 	if err != nil {
-		self.Logger.Debug("Missing authorization cookie")
+		a.Logger.Debug("missing authorization cookie")
 		return nil
 	}
 
@@ -195,7 +195,7 @@ func (self *authServer) ModifyHeader(r *http.Request) error {
 	return nil
 }
 
-func (self *authServer) encodeState(r *http.Request) (string, error) {
+func (a *authServer) encodeState(r *http.Request) (string, error) {
 
 	redirectUri := r.FormValue("redirect_uri")
 	if redirectUri == "" {
@@ -207,26 +207,26 @@ func (self *authServer) encodeState(r *http.Request) (string, error) {
 		Timestamp:   time.Now().Unix(),
 	}
 
-	return self.encode(state)
+	return a.encode(state)
 }
 
-func (self *authServer) decodeState(r *http.Request) (State, error) {
+func (a *authServer) decodeState(r *http.Request) (State, error) {
 
 	var state State
 
-	cookie, err := r.Cookie(self.stateCookieName)
+	cookie, err := r.Cookie(a.stateCookieName)
 	if err != nil {
 		return state, err
 	}
 
 	if cookie.Value != r.FormValue("state") {
-		return state, errors.New("Invalid state")
+		return state, errors.New("invalid state")
 	}
 
-	return state, self.decode(cookie.Value, &state)
+	return state, a.decode(cookie.Value, &state)
 }
 
-func (self *authServer) encode(value interface{}) (string, error) {
+func (a *authServer) encode(value interface{}) (string, error) {
 
 	json, err := json.Marshal(value)
 	if err != nil {
@@ -238,7 +238,7 @@ func (self *authServer) encode(value interface{}) (string, error) {
 	return encoded, nil
 }
 
-func (self *authServer) decode(encoded string, value interface{}) error {
+func (a *authServer) decode(encoded string, value interface{}) error {
 
 	if l := len(encoded) % 4; l > 0 {
 		encoded += strings.Repeat("=", 4-l)
@@ -252,7 +252,7 @@ func (self *authServer) decode(encoded string, value interface{}) error {
 	return json.Unmarshal(decoded, &value)
 }
 
-func (self *authServer) checkError(r *http.Request) error {
+func (a *authServer) checkError(r *http.Request) error {
 
 	errType := r.FormValue("error")
 	errDesc := r.FormValue("error_description")

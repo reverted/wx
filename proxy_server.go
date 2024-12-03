@@ -19,14 +19,14 @@ func WithClient(client *http.Client) proxyOpt {
 }
 
 func WithTarget(target *url.URL) proxyOpt {
-	return func(self *proxyServer) {
-		self.Target = target
+	return func(p *proxyServer) {
+		p.Target = target
 	}
 }
 
 func WithModifier(modifier Modifier) proxyOpt {
-	return func(self *proxyServer) {
-		self.Modifiers = append(self.Modifiers, modifier)
+	return func(p *proxyServer) {
+		p.Modifiers = append(p.Modifiers, modifier)
 	}
 }
 
@@ -51,16 +51,16 @@ type proxyServer struct {
 	Modifiers []Modifier
 }
 
-func (self *proxyServer) Serve(w http.ResponseWriter, r *http.Request) {
+func (p *proxyServer) Serve(w http.ResponseWriter, r *http.Request) {
 
-	req, err := self.NewRequest(r)
+	req, err := p.NewRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		self.Logger.Errorf("new request : %v", err)
+		p.Logger.Errorf("new request : %v", err)
 		return
 	}
 
-	resp, err := self.Client.Do(req)
+	resp, err := p.Client.Do(req)
 	if err != nil {
 		switch t := err.(type) {
 		default:
@@ -68,7 +68,7 @@ func (self *proxyServer) Serve(w http.ResponseWriter, r *http.Request) {
 		case *statusError:
 			http.Error(w, t.Error(), t.StatusCode)
 		}
-		self.Logger.Errorf("client do : %v", err)
+		p.Logger.Errorf("client do : %v", err)
 		return
 	}
 
@@ -83,18 +83,18 @@ func (self *proxyServer) Serve(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(resp.StatusCode)
 
 	if resp.Header.Get("Content-Type") == "text/event-stream" {
-		self.Stream(w, req, resp)
-		self.Logger.Info("streaming done")
+		p.Stream(w, req, resp)
+		p.Logger.Info("streaming done")
 	} else {
 		io.Copy(w, resp.Body)
 	}
 }
 
-func (self *proxyServer) NewRequest(r *http.Request) (*http.Request, error) {
+func (p *proxyServer) NewRequest(r *http.Request) (*http.Request, error) {
 
-	url := self.Target.ResolveReference(r.URL)
+	url := p.Target.ResolveReference(r.URL)
 
-	self.Logger.Info("<<< ", r.URL.String())
+	p.Logger.Info("<<< ", r.URL.String())
 
 	req, err := http.NewRequestWithContext(r.Context(), r.Method, url.String(), r.Body)
 	if err != nil {
@@ -107,18 +107,18 @@ func (self *proxyServer) NewRequest(r *http.Request) (*http.Request, error) {
 		}
 	}
 
-	for _, modifier := range self.Modifiers {
+	for _, modifier := range p.Modifiers {
 		if err := modifier(req); err != nil {
 			return nil, fmt.Errorf("modifier: %w", err)
 		}
 	}
 
-	self.Logger.Info(">>> ", req.URL.String())
+	p.Logger.Info(">>> ", req.URL.String())
 
 	return req, nil
 }
 
-func (self *proxyServer) Stream(w http.ResponseWriter, r *http.Request, resp *http.Response) {
+func (p *proxyServer) Stream(w http.ResponseWriter, r *http.Request, resp *http.Response) {
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -133,12 +133,12 @@ func (self *proxyServer) Stream(w http.ResponseWriter, r *http.Request, resp *ht
 		for {
 			n, err := resp.Body.Read(buf)
 			if err != nil {
-				self.Logger.Errorf("read body: %v", err)
+				p.Logger.Errorf("read body: %v", err)
 				break
 			}
 
 			if _, err := w.Write(buf[:n]); err != nil {
-				self.Logger.Errorf("write body: %v", err)
+				p.Logger.Errorf("write body: %v", err)
 				break
 			}
 
@@ -146,7 +146,7 @@ func (self *proxyServer) Stream(w http.ResponseWriter, r *http.Request, resp *ht
 				break
 			}
 		}
-		self.Logger.Info("copy done")
+		p.Logger.Info("copy done")
 	}()
 
 	for {
@@ -154,7 +154,7 @@ func (self *proxyServer) Stream(w http.ResponseWriter, r *http.Request, resp *ht
 		case <-time.After(100 * time.Millisecond):
 			flusher.Flush()
 		case <-ctx.Done():
-			self.Logger.Info("context done")
+			p.Logger.Info("context done")
 			return
 		}
 	}
