@@ -57,7 +57,7 @@ func (c *proxyCache) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *proxyCache) serveError(w http.ResponseWriter, err error) {
-	c.Logger.Error(err)
+	c.Logger.Errorf("error : %v", err)
 
 	var httpError *HttpError
 	if errors.As(err, &httpError) {
