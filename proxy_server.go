@@ -1,6 +1,7 @@
 package wx
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -55,23 +56,15 @@ func (p *proxyServer) Serve(w http.ResponseWriter, r *http.Request) {
 
 	req, err := p.NewRequest(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		p.Logger.Errorf("new request : %v", err)
+		p.handleError(w, fmt.Errorf("new request: %w", err))
 		return
 	}
 
 	resp, err := p.Client.Do(req)
 	if err != nil {
-		switch t := err.(type) {
-		default:
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		case *statusError:
-			http.Error(w, t.Error(), t.StatusCode)
-		}
-		p.Logger.Errorf("client do : %v", err)
+		p.handleError(w, fmt.Errorf("client do: %w", err))
 		return
 	}
-
 	defer resp.Body.Close()
 
 	for h, val := range resp.Header {
@@ -87,6 +80,19 @@ func (p *proxyServer) Serve(w http.ResponseWriter, r *http.Request) {
 		p.Logger.Info("streaming done")
 	} else {
 		io.Copy(w, resp.Body)
+	}
+}
+
+func (p *proxyServer) handleError(w http.ResponseWriter, err error) {
+
+	var statusErr *statusError
+	if errors.As(err, &statusErr) {
+		p.Logger.Errorf("handle status error: %v", err)
+		http.Error(w, statusErr.Error(), statusErr.StatusCode)
+	} else {
+
+		p.Logger.Errorf("handle error: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
