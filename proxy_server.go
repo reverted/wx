@@ -9,6 +9,14 @@ import (
 	"time"
 )
 
+type Logger interface {
+	Error(a ...interface{})
+	Errorf(fmt string, a ...interface{})
+	Info(a ...interface{})
+	Infof(fmt string, a ...interface{})
+	Debug(a ...interface{})
+}
+
 type Modifier func(r *http.Request) error
 
 type proxyOpt func(*proxyServer)
